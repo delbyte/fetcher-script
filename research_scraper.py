@@ -22,9 +22,9 @@ def get_authors_from_semantic_scholar(field, num_authors=10):
     return list(authors)
 
 
-def search_orcid_profiles(author_name, delay):
-    """Search for an author's ORCID profile via Google Search scraping."""
-    query = f"{author_name} ORCID site:orcid.org"
+def search_email_online(author_name, delay):
+    """Search for an author's email via Google scraping from university pages."""
+    query = f"{author_name} email site:.edu OR site:.ac.in OR site:.ac.uk"
     search_url = f"https://www.google.com/search?q={query}"
     headers = {"User-Agent": "Mozilla/5.0"}
 
@@ -39,17 +39,10 @@ def search_orcid_profiles(author_name, delay):
     return None
 
 
-def fetch_emails_from_orcid(orcid_url):
-    """Extract email from an ORCID profile page if available."""
-    if not orcid_url.startswith("http"):
-        orcid_url = "https://orcid.org" + orcid_url  # Ensure full URL
-
-    response = requests.get(orcid_url)
-    if response.status_code != 200:
-        return None
-
+def extract_email_from_page(response):
+    """Extract email from a university or research page."""
     soup = BeautifulSoup(response.text, "html.parser")
-    email_match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", soup.text)
+    email_match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}", soup.text)
     return email_match.group(0) if email_match else None
 
 
@@ -80,9 +73,9 @@ def main():
         writer.writerow(["Author Name", "Email"])
 
     for author in authors:
-        print(f"Searching for {author}'s ORCID profile...")
+        print(f"Searching for {author}'s email...")
         while True:
-            response = search_orcid_profiles(author, delay)
+            response = search_email_online(author, delay)
             if response == "retry":
                 consecutive_failures += 1
                 delay = min(delay * 2, max_delay)  # Exponential backoff
@@ -98,21 +91,12 @@ def main():
             break
 
         if response:
-            soup = BeautifulSoup(response.text, "html.parser")
-            for link in soup.find_all("a", href=True):
-                url = link["href"]
-                if "orcid.org" in url:
-                    orcid_url = url.split("&")[0]  # Extract clean ORCID link
-                    if not orcid_url.startswith("http"):
-                        orcid_url = "https://orcid.org" + orcid_url  # Ensure full URL
-                    print(f"Found ORCID: {orcid_url}. Searching for email...")
-                    email = fetch_emails_from_orcid(orcid_url)
-                    if email:
-                        print(f"Email found: {email}")
-                        save_email_to_csv(author, email)
-                    else:
-                        print(f"No email found for {author}")
-                    break
+            email = extract_email_from_page(response)
+            if email:
+                print(f"Email found: {email}")
+                save_email_to_csv(author, email)
+            else:
+                print(f"No email found for {author}")
 
 
 if __name__ == "__main__":
