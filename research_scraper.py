@@ -39,11 +39,30 @@ def search_email_online(author_name, delay):
     return None
 
 
-def extract_email_from_page(response):
-    """Extract email from a university or research page."""
+def extract_links_from_google(response):
+    """Extracts top search result links from Google search results."""
     soup = BeautifulSoup(response.text, "html.parser")
-    email_match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}", soup.text)
-    return email_match.group(0) if email_match else None
+    links = []
+    for link in soup.find_all("a", href=True):
+        href = link["href"]
+        if "url?q=" in href:
+            clean_link = href.split("url?q=")[1].split("&")[0]
+            links.append(clean_link)
+    return links[:5]  # Limit to top 5 links to avoid excessive requests
+
+
+def extract_email_from_page(url):
+    """Visit the university page and extract an email if available."""
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code != 200:
+            return None
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        email_match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", soup.text)
+        return email_match.group(0) if email_match else None
+    except requests.RequestException:
+        return None
 
 
 def save_email_to_csv(author, email, filename="researcher_emails.csv"):
@@ -91,10 +110,13 @@ def main():
             break
 
         if response:
-            email = extract_email_from_page(response)
-            if email:
-                print(f"Email found: {email}")
-                save_email_to_csv(author, email)
+            links = extract_links_from_google(response)
+            for url in links:
+                email = extract_email_from_page(url)
+                if email:
+                    print(f"Email found: {email}")
+                    save_email_to_csv(author, email)
+                    break
             else:
                 print(f"No email found for {author}")
 
