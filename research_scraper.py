@@ -32,7 +32,7 @@ def search_orcid_profiles(author_name, delay):
     response = requests.get(search_url, headers=headers)
 
     if response.status_code == 429:
-        print("Too many requests! Increasing delay...")
+        print("Too many requests! Increasing backoff...")
         return "retry"
     elif response.status_code == 200:
         return response
@@ -41,6 +41,9 @@ def search_orcid_profiles(author_name, delay):
 
 def fetch_emails_from_orcid(orcid_url):
     """Extract email from an ORCID profile page if available."""
+    if not orcid_url.startswith("http"):
+        orcid_url = "https://orcid.org" + orcid_url  # Ensure full URL
+
     response = requests.get(orcid_url)
     if response.status_code != 200:
         return None
@@ -50,14 +53,12 @@ def fetch_emails_from_orcid(orcid_url):
     return email_match.group(0) if email_match else None
 
 
-def save_emails_to_csv(emails, filename="researcher_emails.csv"):
-    """Save collected emails to a CSV file without duplicates."""
-    emails = list(set(emails))  # Remove duplicates
-    with open(filename, "w", newline="") as file:
+def save_email_to_csv(author, email, filename="researcher_emails.csv"):
+    """Append a collected email to a CSV file dynamically."""
+    with open(filename, "a", newline="") as file:
         writer = csv.writer(file)
-        writer.writerow(["Author Name", "Email"])
-        writer.writerows(emails)
-    print(f"Saved {len(emails)} emails to {filename}")
+        writer.writerow([author, email])
+    print(f"Saved: {author} - {email}")
 
 
 def main():
@@ -69,20 +70,30 @@ def main():
         print("No authors found.")
         return
 
-    emails = []
     delay = 2  # Initial delay in seconds
     min_delay = 2
-    max_delay = 10
+    max_delay = 60  # Maximum delay limit
+    consecutive_failures = 0  # Track consecutive failures
+
+    with open("researcher_emails.csv", "w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Author Name", "Email"])
 
     for author in authors:
         print(f"Searching for {author}'s ORCID profile...")
         while True:
             response = search_orcid_profiles(author, delay)
             if response == "retry":
-                delay = min(delay * 2, max_delay)  # Increase delay but cap it
-                print(f"Increasing delay to {delay} seconds...")
+                consecutive_failures += 1
+                delay = min(delay * 2, max_delay)  # Exponential backoff
+                print(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+                if consecutive_failures >= 3:
+                    print("Multiple failures detected. Stopping execution. Try again later.")
+                    return
                 continue
             elif response:
+                consecutive_failures = 0  # Reset failure count on success
                 delay = max(delay / 1.5, min_delay)  # Reduce delay but keep a minimum
             break
 
@@ -92,16 +103,16 @@ def main():
                 url = link["href"]
                 if "orcid.org" in url:
                     orcid_url = url.split("&")[0]  # Extract clean ORCID link
+                    if not orcid_url.startswith("http"):
+                        orcid_url = "https://orcid.org" + orcid_url  # Ensure full URL
                     print(f"Found ORCID: {orcid_url}. Searching for email...")
                     email = fetch_emails_from_orcid(orcid_url)
                     if email:
-                        emails.append((author, email))
+                        print(f"Email found: {email}")
+                        save_email_to_csv(author, email)
+                    else:
+                        print(f"No email found for {author}")
                     break
-
-    if emails:
-        save_emails_to_csv(emails)
-    else:
-        print("No emails found.")
 
 
 if __name__ == "__main__":
