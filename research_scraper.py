@@ -1,124 +1,111 @@
 import requests
 import csv
-import re
-from bs4 import BeautifulSoup
 import time
 
+SEMANTIC_SCHOLAR_BASE = "https://api.semanticscholar.org/graph/v1"
+ORCID_API_BASE = "https://pub.orcid.org/v3.0"
 
-def get_authors_from_semantic_scholar(field, num_authors=10):
-    """Fetch author names from Semantic Scholar based on a research field."""
-    url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={field}&fields=authors&limit={num_authors}"
+
+def get_researchers(field, num_researchers):
+    """
+    Fetch researchers from Semantic Scholar using the author search endpoint.
+    We include the word 'researcher' in the query to target people working in the field.
+    Returns a dictionary mapping researcher names to their Semantic Scholar author IDs.
+    """
+    query = f"{field} researcher"
+    url = f"{SEMANTIC_SCHOLAR_BASE}/author/search?query={query}&limit={num_researchers}"
     response = requests.get(url)
+
     if response.status_code != 200:
-        print("Error fetching data from Semantic Scholar")
-        return []
+        print("Error fetching researchers from Semantic Scholar")
+        return {}
 
     data = response.json()
-    authors = set()
-    for paper in data.get("data", []):
-        for author in paper.get("authors", []):
-            authors.add(author.get("name", "Unknown"))
+    researchers = {}
+    for author in data.get("data", []):
+        name = author.get("name")
+        author_id = author.get("authorId")
+        if name and author_id:
+            # Avoid duplicates by using the researcher's name as key.
+            researchers[name] = author_id
+    return researchers
 
-    return list(authors)
+
+def get_orcid(author_id):
+    """
+    Fetch the ORCID ID for a given Semantic Scholar author using the author details endpoint.
+    """
+    url = f"{SEMANTIC_SCHOLAR_BASE}/author/{author_id}?fields=externalIds"
+    response = requests.get(url)
+    if response.status_code != 200:
+        return None
+    data = response.json()
+    return data.get("externalIds", {}).get("ORCID")
 
 
-def search_email_online(author_name, delay):
-    """Search for an author's email via Google scraping from university pages."""
-    query = f"{author_name} email site:.edu OR site:.ac.in OR site:.ac.uk"
-    search_url = f"https://www.google.com/search?q={query}"
-    headers = {"User-Agent": "Mozilla/5.0"}
+def get_email(orcid_id):
+    """
+    Use the ORCID public API to fetch the researcher's email.
+    (Note: Most ORCID emails are private; only public emails are returned.)
+    """
+    if not orcid_id:
+        return None
 
-    time.sleep(delay)  # Adaptive delay to avoid detection
-    response = requests.get(search_url, headers=headers)
-
-    if response.status_code == 429:
-        print("Too many requests! Increasing backoff...")
-        return "retry"
-    elif response.status_code == 200:
-        return response
+    url = f"{ORCID_API_BASE}/{orcid_id}"
+    headers = {"Accept": "application/json"}
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        return None
+    data = response.json()
+    emails = data.get("person", {}).get("emails", {}).get("email", [])
+    for email_obj in emails:
+        if email_obj.get("verified", False):  # Prefer verified emails
+            return email_obj.get("email")
     return None
 
 
-def extract_links_from_google(response):
-    """Extracts top search result links from Google search results."""
-    soup = BeautifulSoup(response.text, "html.parser")
-    links = []
-    for link in soup.find_all("a", href=True):
-        href = link["href"]
-        if "url?q=" in href:
-            clean_link = href.split("url?q=")[1].split("&")[0]
-            links.append(clean_link)
-    return links[:5]  # Limit to top 5 links to avoid excessive requests
-
-
-def extract_email_from_page(url):
-    """Visit the university page and extract an email if available."""
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code != 200:
-            return None
-
-        soup = BeautifulSoup(response.text, "html.parser")
-        email_match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", soup.text)
-        return email_match.group(0) if email_match else None
-    except requests.RequestException:
-        return None
-
-
-def save_email_to_csv(author, email, filename="researcher_emails.csv"):
-    """Append a collected email to a CSV file dynamically."""
+def save_to_csv(name, email, filename="researcher_emails.csv"):
+    """
+    Append the researcher’s name and email to a CSV file.
+    """
     with open(filename, "a", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow([author, email])
-    print(f"Saved: {author} - {email}")
+        csv.writer(file).writerow([name, email])
+    print(f"Saved: {name} - {email}")
 
 
 def main():
     field = input("Enter research field: ")
-    num_authors = int(input("Enter number of researchers: "))
-
-    authors = get_authors_from_semantic_scholar(field, num_authors)
-    if not authors:
-        print("No authors found.")
+    try:
+        num_researchers = int(input("Enter number of researchers to search: "))
+    except ValueError:
+        print("Invalid number provided.")
         return
 
-    delay = 2  # Initial delay in seconds
-    min_delay = 2
-    max_delay = 60  # Maximum delay limit
-    consecutive_failures = 0  # Track consecutive failures
+    # Get researchers using the author search endpoint.
+    researchers = get_researchers(field, num_researchers)
+    if not researchers:
+        print("No researchers found.")
+        return
 
+    # Prepare CSV file (overwrite if it exists)
     with open("researcher_emails.csv", "w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(["Author Name", "Email"])
+        csv.writer(file).writerow(["Researcher Name", "Email"])
 
-    for author in authors:
-        print(f"Searching for {author}'s email...")
-        while True:
-            response = search_email_online(author, delay)
-            if response == "retry":
-                consecutive_failures += 1
-                delay = min(delay * 2, max_delay)  # Exponential backoff
-                print(f"Retrying in {delay} seconds...")
-                time.sleep(delay)
-                if consecutive_failures >= 3:
-                    print("Multiple failures detected. Stopping execution. Try again later.")
-                    return
-                continue
-            elif response:
-                consecutive_failures = 0  # Reset failure count on success
-                delay = max(delay / 1.5, min_delay)  # Reduce delay but keep a minimum
-            break
-
-        if response:
-            links = extract_links_from_google(response)
-            for url in links:
-                email = extract_email_from_page(url)
-                if email:
-                    print(f"Email found: {email}")
-                    save_email_to_csv(author, email)
-                    break
-            else:
-                print(f"No email found for {author}")
+    for name, author_id in researchers.items():
+        print(f"\nProcessing researcher: {name}")
+        orcid_id = get_orcid(author_id)
+        if not orcid_id:
+            print(f"No ORCID ID found for {name}")
+            continue
+        print(f"Found ORCID for {name}: {orcid_id}")
+        email = get_email(orcid_id)
+        if email:
+            print(f"Email found for {name}: {email}")
+            save_to_csv(name, email)
+        else:
+            print(f"No public email found for {name}")
+        # Small delay to respect API rate limits
+        time.sleep(1)
 
 
 if __name__ == "__main__":
