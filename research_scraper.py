@@ -1,3 +1,4 @@
+import csv
 import requests
 import logging
 import time
@@ -98,6 +99,19 @@ def find_author_emails(field, num_emails):
     return list(found_emails)[:num_emails]
 
 
+# Function to save emails to a CSV file
+def save_emails_to_csv(emails, filename="emails.csv"):
+    try:
+        with open(filename, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Email"])
+            for email in emails:
+                writer.writerow([email])
+        logging.info(f"Emails successfully saved to {filename}")
+    except Exception as err:
+        logging.error(f"Error occurred while saving emails to CSV: {err}")
+
+
 # Main script
 def main():
     field = input("Enter the field of research (e.g., 'machine learning'): ")
@@ -109,6 +123,7 @@ def main():
         logging.info("Found the following emails:")
         for email in emails:
             print(email)
+        save_emails_to_csv(emails)
     else:
         logging.warning("No emails found.")
 
