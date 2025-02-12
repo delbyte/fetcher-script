@@ -64,6 +64,7 @@ def find_author_emails(field, num_emails):
     ]
 
     found_emails = set()
+    visited_links = set()
 
     for search_url in search_urls:
         if len(found_emails) >= num_emails:
@@ -78,13 +79,24 @@ def find_author_emails(field, num_emails):
             # Extract author profile links or publication links
             links = [a['href'] for a in soup.find_all('a', href=True) if not is_irrelevant(a.text)]
 
-            for link in links:
+            # Prioritize arXiv links
+            arxiv_links = [link for link in links if 'arxiv.org' in link]
+            other_links = [link for link in links if 'arxiv.org' not in link]
+            prioritized_links = arxiv_links + other_links
+
+            for link in prioritized_links:
                 if len(found_emails) >= num_emails:
                     break
 
                 # Build the full URL if it's relative
                 full_url = link if link.startswith(
                     'http') else f"{search_url.split('/')[0]}//{search_url.split('/')[2]}{link}"
+
+                # Skip already visited links
+                if full_url in visited_links:
+                    continue
+
+                visited_links.add(full_url)
                 logging.info(f"Scraping potential profile: {full_url}")
 
                 # Scrape emails from the profile or publication page
