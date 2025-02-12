@@ -28,11 +28,22 @@ IRRELEVANT_TERMS = [
     "copyright", "financial aid", "scholarships", "conference schedule"
 ]
 
+# List of generic email keywords
+GENERIC_EMAIL_KEYWORDS = [
+    "info@", "support@", "admin@", "contact@", "help@",
+    "webmaster@", "nobody@", "postmaster@", "service@", "team@", "no-reply@", "noreply@"
+]
+
 
 # Function to check if a name or term is irrelevant
 def is_irrelevant(name):
     name_lower = name.lower()
     return any(term in name_lower for term in IRRELEVANT_TERMS)
+
+
+# Function to check if an email is generic or non-personal
+def is_generic_email(email):
+    return any(keyword in email.lower() for keyword in GENERIC_EMAIL_KEYWORDS)
 
 
 # Function to scrape emails from a given URL
@@ -45,7 +56,10 @@ def scrape_emails(url):
 
         # Extract potential email addresses
         emails = set(re.findall(r'[\w.-]+@[\w.-]+\.\w+', text))
-        return {email for email in emails if not is_irrelevant(email)}
+
+        # Remove irrelevant and generic emails
+        valid_emails = {email for email in emails if not is_irrelevant(email) and not is_generic_email(email)}
+        return valid_emails
     except HTTPError as http_err:
         logging.warning(f"HTTP error occurred while fetching {url}: {http_err}")
     except Exception as err:
