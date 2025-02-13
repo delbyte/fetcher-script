@@ -3,8 +3,10 @@ import requests
 import logging
 import time
 import re
+import random
 from requests.exceptions import HTTPError
 from bs4 import BeautifulSoup
+import backoff
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -34,22 +36,31 @@ GENERIC_EMAIL_KEYWORDS = [
     "webmaster@", "nobody@", "postmaster@", "service@", "team@", "no-reply@", "noreply@"
 ]
 
+# List of user-agent strings
+user_agents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
+    'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36',
+    # Add more user-agent strings here
+]
+
+def get_random_user_agent():
+    return random.choice(user_agents)
 
 # Function to check if a name or term is irrelevant
 def is_irrelevant(name):
     name_lower = name.lower()
     return any(term in name_lower for term in IRRELEVANT_TERMS)
 
-
 # Function to check if an email is generic or non-personal
 def is_generic_email(email):
     return any(keyword in email.lower() for keyword in GENERIC_EMAIL_KEYWORDS)
 
-
 # Function to scrape emails from a given URL
+@backoff.on_exception(backoff.expo, requests.exceptions.RequestException, max_tries=5)
 def scrape_emails(url):
+    headers = {'User-Agent': get_random_user_agent()}
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         text = soup.get_text()
@@ -64,8 +75,8 @@ def scrape_emails(url):
         logging.warning(f"HTTP error occurred while fetching {url}: {http_err}")
     except Exception as err:
         logging.warning(f"Error occurred while fetching {url}: {err}")
+    time.sleep(1)  # Add a delay of 1 second between requests
     return set()
-
 
 # Function to search for author names and scrape emails
 def find_author_emails(field, num_emails):
@@ -86,7 +97,8 @@ def find_author_emails(field, num_emails):
 
         logging.info(f"Fetching search results from: {search_url}")
         try:
-            response = requests.get(search_url, timeout=10)
+            headers = {'User-Agent': get_random_user_agent()}
+            response = requests.get(search_url, headers=headers, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -103,8 +115,7 @@ def find_author_emails(field, num_emails):
                     break
 
                 # Build the full URL if it's relative
-                full_url = link if link.startswith(
-                    'http') else f"{search_url.split('/')[0]}//{search_url.split('/')[2]}{link}"
+                full_url = link if link.startswith('http') else f"{search_url.split('/')[0]}//{search_url.split('/')[2]}{link}"
 
                 # Skip already visited links
                 if full_url in visited_links:
@@ -124,7 +135,6 @@ def find_author_emails(field, num_emails):
 
     return list(found_emails)[:num_emails]
 
-
 # Function to save emails to a CSV file
 def save_emails_to_csv(emails, filename="emails.csv"):
     try:
@@ -136,7 +146,6 @@ def save_emails_to_csv(emails, filename="emails.csv"):
         logging.info(f"Emails successfully saved to {filename}")
     except Exception as err:
         logging.error(f"Error occurred while saving emails to CSV: {err}")
-
 
 # Main script
 def main():
@@ -152,7 +161,6 @@ def main():
         save_emails_to_csv(emails)
     else:
         logging.warning("No emails found.")
-
 
 if __name__ == "__main__":
     main()
