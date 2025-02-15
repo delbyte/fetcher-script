@@ -104,23 +104,23 @@ time.sleep(random.uniform(1, 3))
 
 ---
 
-Considerations and Best Practices
+## Considerations and Best Practices
 
-Respect Website Policies:
+### Respect Website Policies:
 
 Always ensure you have permission to scrape a website.
 
 Adhere to the website's terms of service and avoid scraping if prohibited.
 
 
-Handle Ethical Concerns:
+### Handle Ethical Concerns:
 
 Use the data responsibly and comply with data privacy laws like GDPR.
 
 Inform website owners if you intend to use the data commercially.
 
 
-Avoid Server Overloading:
+### Avoid Server Overloading:
 
 Do not scrape large amounts of data in short periods.
 
@@ -131,9 +131,9 @@ Use appropriate delays between requests, as included in the script.
 
 ---
 
-Troubleshooting
+## Troubleshooting
 
-Common Errors:
+### Common Errors:
 
 Network Errors: Ensure your internet connection is stable. The script retries failed requests using exponential backoff.
 
@@ -150,14 +150,14 @@ The page structure has changed. In such cases, inspect the HTML structure and up
 
 ---
 
-License
+## License
 
 This project is licensed under the MIT License. See the LICENSE file for details.
 
 
 ---
 
-Disclaimer
+## Disclaimer
 
 This script is for educational purposes only. Unauthorized web scraping can violate website policies or laws. Always obtain proper permissions before scraping data.
 
