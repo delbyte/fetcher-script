@@ -132,10 +132,10 @@ Use appropriate delays between requests, as included in the script.
 ---
 ##TODO
 
--[] Make a simple UI for inputting the field and number of researchers. 
--[] Find a way to make the results faster. 
--[] Find a way to make sure the same results are not acquired if you run the same field multiple times. 
--[] Make some sort of implementation where multiple people could use the app at the same time and get distinct responses (webdev part)
+-[ ] Make a simple UI for inputting the field and number of researchers. 
+-[ ] Find a way to make the results faster. 
+-[ ] Find a way to make sure the same results are not acquired if you run the same field multiple times. 
+-[ ] Make some sort of implementation where multiple people could use the app at the same time and get distinct responses (webdev part)
 
 
 
