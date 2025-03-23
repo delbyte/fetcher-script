@@ -4,10 +4,10 @@ import logging
 import time
 import re
 import random
+import os
 from requests.exceptions import HTTPError
 from bs4 import BeautifulSoup
-import backoff
-
+from tkinter import Tk, Label, Entry, Button, StringVar, IntVar, messagebox
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -57,7 +57,6 @@ def is_generic_email(email):
     return any(keyword in email.lower() for keyword in GENERIC_EMAIL_KEYWORDS)
 
 # Function to scrape emails from a given URL
-@backoff.on_exception(backoff.expo, requests.exceptions.RequestException, max_tries=5)
 def scrape_emails(url):
     headers = {'User-Agent': get_random_user_agent()}
     try:
@@ -128,6 +127,9 @@ def find_author_emails(field, num_emails):
                 # Scrape emails from the profile or publication page
                 emails = scrape_emails(full_url)
                 found_emails.update(emails)
+                for email in emails:
+                    logging.info("Email found!")
+                    messagebox.showinfo("Email Found", f"Email found: {email}")
 
         except HTTPError as http_err:
             logging.warning(f"HTTP error occurred while accessing {search_url}: {http_err}")
@@ -148,20 +150,40 @@ def save_emails_to_csv(emails, filename="emails.csv"):
     except Exception as err:
         logging.error(f"Error occurred while saving emails to CSV: {err}")
 
-# Main script
-def main():
-    field = input("Enter the field of research (e.g., 'machine learning'): ")
-    num_emails = int(input("Enter the number of emails you want to find: "))
+# Function to open the CSV file
+def open_csv_file(filename="emails.csv"):
+    try:
+        os.startfile(filename)
+    except Exception as err:
+        logging.error(f"Error occurred while opening the CSV file: {err}")
 
-    emails = find_author_emails(field, num_emails)
+# Function to create the Tkinter UI
+def create_ui():
+    root = Tk()
+    root.title("Research Email Scraper")
 
-    if emails:
-        logging.info("Found the following emails:")
-        for email in emails:
-            print(email)
-        save_emails_to_csv(emails)
-    else:
-        logging.warning("No emails found.")
+    Label(root, text="Field of Research:").grid(row=0, column=0, padx=10, pady=10)
+    field_var = StringVar()
+    Entry(root, textvariable=field_var).grid(row=0, column=1, padx=10, pady=10)
+
+    Label(root, text="Number of Emails:").grid(row=1, column=0, padx=10, pady=10)
+    num_emails_var = IntVar()
+    Entry(root, textvariable=num_emails_var).grid(row=1, column=1, padx=10, pady=10)
+
+    def on_start():
+        field = field_var.get()
+        num_emails = num_emails_var.get()
+        emails = find_author_emails(field, num_emails)
+        if emails:
+            save_emails_to_csv(emails)
+            messagebox.showinfo("Success", "Emails successfully scraped and saved!")
+        else:
+            messagebox.showwarning("No Emails Found", "No emails found.")
+
+    Button(root, text="Start Scraping", command=on_start).grid(row=2, column=0, columnspan=2, padx=10, pady=10)
+    Button(root, text="Open CSV", command=open_csv_file).grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+
+    root.mainloop()
 
 if __name__ == "__main__":
-    main()
+    create_ui()
