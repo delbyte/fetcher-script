@@ -79,7 +79,7 @@ def scrape_emails(url):
     return set()
 
 # Function to search for author names and scrape emails
-def find_author_emails(field, num_emails):
+def find_author_emails(field, num_emails, status_label):
     logging.info(f"Searching for author emails in the field: {field}")
 
     search_urls = [
@@ -123,6 +123,8 @@ def find_author_emails(field, num_emails):
 
                 visited_links.add(full_url)
                 logging.info(f"Scraping potential profile: {full_url}")
+                status_label.config(text=f"Checking profile: {full_url}")
+                status_label.update()
 
                 # Scrape emails from the profile or publication page
                 emails = scrape_emails(full_url)
@@ -170,18 +172,22 @@ def create_ui():
     num_emails_var = IntVar()
     Entry(root, textvariable=num_emails_var).grid(row=1, column=1, padx=10, pady=10)
 
+    status_label = Label(root, text="Status: Idle")
+    status_label.grid(row=2, column=0, columnspan=2, padx=10, pady=10)
+
     def on_start():
         field = field_var.get()
         num_emails = num_emails_var.get()
-        emails = find_author_emails(field, num_emails)
+        emails = find_author_emails(field, num_emails, status_label)
         if emails:
             save_emails_to_csv(emails)
             messagebox.showinfo("Success", "Emails successfully scraped and saved!")
         else:
             messagebox.showwarning("No Emails Found", "No emails found.")
+        status_label.config(text="Status: Idle")
 
-    Button(root, text="Start Scraping", command=on_start).grid(row=2, column=0, columnspan=2, padx=10, pady=10)
-    Button(root, text="Open CSV", command=open_csv_file).grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+    Button(root, text="Start Scraping", command=on_start).grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+    Button(root, text="Open CSV", command=open_csv_file).grid(row=4, column=0, columnspan=2, padx=10, pady=10)
 
     root.mainloop()
 
